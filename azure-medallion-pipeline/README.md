@@ -73,3 +73,32 @@ To run this pipeline in your own Azure Databricks environment:
 * **Secret Management:** Migrate Service Principal credentials from notebook variables to an **Azure Key Vault-backed Databricks Secret Scope** (`dbutils.secrets.get()`).
 * **Unity Catalog External Locations:** Configure a Unity Catalog Storage Credential and External Location for the Gold ADLS Gen2 path to query external Delta tables directly without copying into managed storage.
 * **Cost Optimization (FinOps):** Transition the scheduled Workflow from an All-Purpose cluster to an ephemeral **Job Cluster** to reduce DBU costs and guarantee automatic compute teardown.
+# Azure Medallion Lakehouse Pipeline
+
+End-to-end incremental data engineering pipeline built on **Azure Databricks**, **Delta Lake**, **ADLS Gen2**, and **Azure Key Vault**, following the **Medallion Architecture** (Bronze → Silver → Gold).
+
+## Architecture Overview
+
+    Raw Sales Data ──▶ Bronze (ADLS Gen2) ──▶ Silver (Incremental Delta MERGE) ──▶ Gold (Business Aggregations) ──▶ Power BI
+                                                    │
+                                                    ▼
+                                         Delta Maintenance
+                                     (OPTIMIZE / ZORDER / VACUUM)
+
+## Key Features
+* **Medallion Architecture:** Separates raw ingestion (`bronze/raw_sales`), cleansed incremental records (`silver/cleansed_sales`), and reporting-ready business aggregations (`gold`).
+* **Incremental Upserts (`MERGE`):** Uses `DeltaTable.isDeltaTable()` and `DeltaTable.forPath().merge()` on `order_id` to update modified records and insert new rows without full table overwrites or duplicates.
+* **Slowly Changing Dimensions (SCD Type 1 & Type 2):** Implemented historical tracking (`week4_merge_and_scd2`) alongside production incremental upserts.
+* **Delta Lake Optimization:** Automated table maintenance using `OPTIMIZE` (small-file compaction), `ZORDER BY (customer_id)` (data skipping), and `VACUUM` (168-hour retention cleanup).
+* **Security & Governance:** Integrates **Azure Key Vault** secret scopes for credential-free storage access and **Unity Catalog** managed tables.
+* **Orchestration & CI/CD:** Automated via **Databricks Jobs** (`medallion-daily-etl-job`) with scheduled triggers, backed by Databricks Git Folders synced to GitHub.
+
+## Repository Structure
+* `medallion_etl_pipeline.ipynb` — Main production ETL pipeline (Bronze ingestion, Silver cleansing & incremental `MERGE`, Gold aggregations, and Delta maintenance).
+* `week4_merge_and_scd2.ipynb` — Implementation and testing of Delta Lake `MERGE`, SCD Type 1, and SCD Type 2 patterns.
+
+## Tech Stack
+* **Cloud & Storage:** Microsoft Azure, Azure Data Lake Storage Gen2 (ADLS Gen2), Azure Key Vault
+* **Compute & Processing:** Azure Databricks, PySpark, Delta Lake
+* **Governance & Orchestration:** Unity Catalog, Databricks Jobs (Workflows)
+* **BI & Version Control:** Power BI, Git / GitHub
